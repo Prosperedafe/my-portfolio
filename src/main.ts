@@ -19,7 +19,7 @@ const router = createRouter({
     { path: "/projects", name: "Projects", component: Projects },
     { path: "/contact", name: "Contact", component: Contact },
   ],
-  scrollBehavior(savedPosition) {
+  scrollBehavior(_to, _from, savedPosition) {
     if (savedPosition) {
       return savedPosition;
     } else {
