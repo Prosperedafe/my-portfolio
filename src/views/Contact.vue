@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive } from "vue";
+import emailjs from "@emailjs/browser";
 
 interface FormData {
   name: string;
@@ -83,14 +84,26 @@ const submitForm = async () => {
   submitError.value = "";
 
   try {
-    // In a real application, you would send the form data to your backend
-    // For this example, we'll simulate a successful form submission
+    const response = await emailjs.send(
+      "service_njc5ljg",
+      "template_r8xeep1",
+      {
+        from_name: formData.name,
+        to_name: "Prosper",
+        from_email: formData.email,
+        subject: formData.subject,
+        message: formData.message,
+      },
+      "DRN_vB7PkDwvIdX1O"
+    );
+
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    // Reset form after successful submission
     Object.assign(formData, initialFormData);
     isSubmitted.value = true;
+    console.log(response);
   } catch (error) {
+    console.log(error);
     submitError.value =
       "An error occurred while submitting the form. Please try again.";
     console.error("Form submission error:", error);
@@ -336,7 +349,7 @@ const submitForm = async () => {
                   id="name"
                   v-model="formData.name"
                   :class="[
-                    'w-full px-4 py-3 rounded-lg border focus:ring-2 focus:outline-none transition-colors',
+                    'text-gray-800 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:outline-none transition-colors',
                     errors.name
                       ? 'border-red-300 focus:border-red-500 focus:ring-red-200'
                       : 'border-gray-300 dark:border-gray-700 focus:border-primary-500 focus:ring-primary-200 dark:focus:ring-primary-900',
@@ -360,7 +373,7 @@ const submitForm = async () => {
                   id="email"
                   v-model="formData.email"
                   :class="[
-                    'w-full px-4 py-3 rounded-lg border focus:ring-2 focus:outline-none transition-colors',
+                    'text-gray-800 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:outline-none transition-colors',
                     errors.email
                       ? 'border-red-300 focus:border-red-500 focus:ring-red-200'
                       : 'border-gray-300 dark:border-gray-700 focus:border-primary-500 focus:ring-primary-200 dark:focus:ring-primary-900',
@@ -384,7 +397,7 @@ const submitForm = async () => {
                   id="subject"
                   v-model="formData.subject"
                   :class="[
-                    'w-full px-4 py-3 rounded-lg border focus:ring-2 focus:outline-none transition-colors',
+                    'text-gray-800 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:outline-none transition-colors',
                     errors.subject
                       ? 'border-red-300 focus:border-red-500 focus:ring-red-200'
                       : 'border-gray-300 dark:border-gray-700 focus:border-primary-500 focus:ring-primary-200 dark:focus:ring-primary-900',
@@ -408,7 +421,7 @@ const submitForm = async () => {
                   v-model="formData.message"
                   rows="5"
                   :class="[
-                    'w-full px-4 py-3 rounded-lg border focus:ring-2 focus:outline-none transition-colors',
+                    'text-gray-800 w-full px-4 py-3 rounded-lg border focus:ring-2 focus:outline-none transition-colors',
                     errors.message
                       ? 'border-red-300 focus:border-red-500 focus:ring-red-200'
                       : 'border-gray-300 dark:border-gray-700 focus:border-primary-500 focus:ring-primary-200 dark:focus:ring-primary-900',

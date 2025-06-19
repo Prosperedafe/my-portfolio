@@ -1,41 +1,54 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
+import playSafari from "../assets/play-safari.png";
+import quilox from "../assets/quilox.webp";
+import hblImg from "../assets/hbl.png";
 
 const router = useRouter();
 
 const featuredProjects = ref([
   {
-    id: 5,
-    title: "OyaSync HBL",
+    id: 3,
+    title: "PlaySafari",
     description:
-      "A task management and collaboration tool for teams with real-time updates and file sharing capabilities.",
-    image:
-      "https://images.pexels.com/photos/6804581/pexels-photo-6804581.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
-    technologies: ["Vue.js", "TypeScript", "TailwindCSS", "Supabase"],
+      "An event booking platform designed for children's parties and educational activities. Parents can book events, receive follow-up for arrangements, and manage bookings in a user-friendly environment.",
+    image: playSafari,
+    technologies: ["React", "Typescript", "SCSS"],
     category: "Web Application",
-    link: "https://apps.microsoft.com/detail/9N9TRMZDRQ2L?hl=en-us&gl=GB&ocid=pdpshare",
-  },
-  {
-    id: 2,
-    title: "DiLusso Store",
-    description:
-      "A modern e-commerce platform featuring responsive design, user authentication, and payment integration.",
-    image:
-      "https://images.pexels.com/photos/5632402/pexels-photo-5632402.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
-    technologies: ["React", "Node.js", "Express", "MongoDB"],
-    link: "https://dilussostore.shop",
+    link: "https://playsafari.ca",
   },
   {
     id: 4,
     title: "Quilox Mobile App",
     description:
-      "A mobile application for event management and ticket booking with real-time notifications.",
-    image:
-      "https://images.pexels.com/photos/8441810/pexels-photo-8441810.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
-    technologies: ["React Native", "TypeScript", "Firebase", "Redux"],
-    category: "Mobile App",
+      "A mobile application for Quilox nightclub, enabling customers to manage wallet-based payments, view event details, and make purchases with real-time updates and wallet synchronization.",
+    image: quilox,
+    technologies: [
+      "React Native",
+      "TypeScript",
+      "RTK Query",
+      "Reduxjs Toolkit",
+    ],
+    category: "Mobile Application",
     link: "https://play.google.com/store/apps/details?id=com.quilox.mobile",
+  },
+  {
+    id: 5,
+    title: "OyaSync HBL",
+    description:
+      "A desktop application for managing business sales, like restaurants, bars, gas stations and retail outlets.",
+    image: hblImg,
+    technologies: [
+      "Electron",
+      "React",
+      "RTK Query",
+      "TypeScript",
+      "Reduxjs Toolkit",
+      "MUI",
+    ],
+    category: "Desktop Application",
+    link: "https://apps.microsoft.com/detail/9N9TRMZDRQ2L?hl=en-us&gl=GB&ocid=pdpshare",
   },
 ]);
 

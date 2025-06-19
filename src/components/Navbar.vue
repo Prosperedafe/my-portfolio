@@ -62,7 +62,7 @@ onUnmounted(() => {
         to="/"
         class="font-heading text-2xl font-bold text-primary-600 dark:text-primary-400"
       >
-        Portfolio
+        <img src="../../logo.png" class="h-[40px]" alt="Prosper Edafe logo" />
       </router-link>
 
       <!-- Desktop Navigation -->
