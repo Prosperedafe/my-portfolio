@@ -58,7 +58,7 @@ const navigateToProjects = () => {
 </script>
 
 <template>
-  <section class="section">
+  <section class="-mt-8 pb-16">
     <div class="container">
       <div class="section-heading">
         <h2 class="text-primary-600 dark:text-primary-400">

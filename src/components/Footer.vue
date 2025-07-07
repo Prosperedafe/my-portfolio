@@ -27,7 +27,11 @@ const socialLinks = [
     <div class="container">
       <div class="flex flex-col md:flex-row justify-between items-center">
         <div class="mb-6 md:mb-0">
-          <img src="../../logo.png" class="h-[30px]" alt="Prosper Edafe logo" />
+          <img
+            src="../../logo.png"
+            class="h-[30px] mb-2"
+            alt="Prosper Edafe logo"
+          />
           <p class="text-gray-600 dark:text-gray-400 text-sm">
             © {{ currentYear }} Prosper Edafe. All rights reserved.
           </p>

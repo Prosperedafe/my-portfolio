@@ -114,7 +114,7 @@ const submitForm = async () => {
 </script>
 
 <template>
-  <div class="pt-24">
+  <div class="pt-16">
     <section class="section">
       <div class="container">
         <div class="section-heading">
