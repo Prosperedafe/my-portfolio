@@ -20,7 +20,7 @@ const experienceItems = ref([
   {
     company: "OyaSync Ltd",
     position: "Software Engineer",
-    period: "November 2024 – Present",
+    period: "November 2024 – May 2025",
     description:
       "Designing, building, and maintaining desktop applications for business sales management using Electron. Also contributed to the development of internal web applications.",
     skills: ["React", "TypeScript", "Electron", "REST APIs"],
