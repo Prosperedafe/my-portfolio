@@ -1,198 +1,300 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
-import { useRoute } from "vue-router";
+import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { gsap, ScrollTrigger, reduced, whenReady } from '../lib/gsap'
+import { nav, socials, site } from '../data/site'
+import Logo from './Logo.vue'
+import ArrowIcon from './ArrowIcon.vue'
 
-// Props
-const props = defineProps<{
-  isDarkMode: boolean;
-}>();
+const route = useRoute()
+const header = ref<HTMLElement | null>(null)
+const menu = ref<HTMLElement | null>(null)
+const open = ref(false)
+const scrolled = ref(false)
 
-// Emits
-const emit = defineEmits(["toggle-dark-mode"]);
+let menuTl: gsap.core.Timeline | null = null
+let trigger: ScrollTrigger | null = null
 
-// Toggle mobile menu
-const isMenuOpen = ref(false);
-const toggleMenu = () => {
-  isMenuOpen.value = !isMenuOpen.value;
-};
+const isActive = (path: string) =>
+  path === '/' ? route.path === '/' : route.path.startsWith(path)
 
-// Handle window resize to close mobile menu
-const handleResize = () => {
-  if (window.innerWidth >= 768) {
-    isMenuOpen.value = false;
-  }
-};
+function buildMenu() {
+  if (!menu.value) return
+  const q = gsap.utils.selector(menu.value)
+  menuTl = gsap
+    .timeline({ paused: true, defaults: { ease: 'silk' } })
+    .set(menu.value, { visibility: 'visible' })
+    .fromTo(
+      menu.value,
+      { clipPath: 'circle(0% at calc(100% - 2.5rem) 2.5rem)' },
+      { clipPath: 'circle(150% at calc(100% - 2.5rem) 2.5rem)', duration: reduced ? 0.01 : 1, ease: 'snap' },
+    )
+    .from(q('.menu-link-inner'), { yPercent: 120, rotate: 5, duration: 0.9, stagger: 0.07 }, '-=0.55')
+    .from(q('.menu-fade'), { autoAlpha: 0, y: 20, duration: 0.6, stagger: 0.05 }, '-=0.6')
+}
 
-// Check active route
-const route = useRoute();
-const isActive = (path: string) => {
-  return route.path === path;
-};
+function toggle() {
+  open.value = !open.value
+}
 
-// Scroll listener for navbar background
-const scrolled = ref(false);
-const handleScroll = () => {
-  scrolled.value = window.scrollY > 50;
-};
+watch(open, (v) => {
+  if (!menuTl) return
+  document.body.style.overflow = v ? 'hidden' : ''
+  if (v) menuTl.timeScale(1).play()
+  else menuTl.timeScale(1.6).reverse()
+})
+
+// Close the menu once the next page is in.
+watch(
+  () => route.fullPath,
+  () => {
+    open.value = false
+  },
+)
+
+const onKey = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') open.value = false
+}
 
 onMounted(() => {
-  window.addEventListener("resize", handleResize);
-  window.addEventListener("scroll", handleScroll);
-  handleScroll(); // Check initial scroll position
-});
+  buildMenu()
+  window.addEventListener('keydown', onKey)
+
+  if (header.value && !reduced) {
+    gsap.set(header.value, { yPercent: -130 })
+    whenReady(() => gsap.to(header.value, { yPercent: 0, duration: 1.2, delay: 0.35 }))
+  }
+
+  // Tuck the bar away while scrolling down, bring it back on the way up.
+  trigger = ScrollTrigger.create({
+    start: 0,
+    end: 'max',
+    onUpdate(self) {
+      scrolled.value = self.scroll() > 40
+      if (!header.value || open.value || reduced) return
+      const hide = self.direction === 1 && self.scroll() > 320
+      gsap.to(header.value, { yPercent: hide ? -130 : 0, duration: 0.6, overwrite: 'auto' })
+    },
+  })
+})
 
 onUnmounted(() => {
-  window.removeEventListener("resize", handleResize);
-  window.removeEventListener("scroll", handleScroll);
-});
+  window.removeEventListener('keydown', onKey)
+  trigger?.kill()
+  menuTl?.kill()
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
-  <header
-    :class="[
-      'fixed w-full z-50 transition-all duration-300',
-      scrolled
-        ? 'bg-white dark:bg-gray-900 shadow-md py-2'
-        : 'bg-transparent py-4',
-    ]"
-  >
-    <div class="container flex items-center justify-between">
-      <!-- Logo -->
-      <router-link
-        to="/"
-        class="font-heading text-2xl font-bold text-primary-600 dark:text-primary-400"
-      >
-        <img src="../../logo.png" class="h-[40px]" alt="Prosper Edafe logo" />
+  <header ref="header" class="fixed inset-x-0 top-0 z-50 px-gutter pt-4 md:pt-5">
+    <div
+      class="nav-bar mx-auto flex items-center justify-between rounded-full py-2 pl-2 pr-2 transition-all duration-500"
+      :class="scrolled && !open ? 'is-scrolled' : ''"
+    >
+      <router-link to="/" class="flex items-center gap-3" aria-label="Prosper Edafe, home">
+        <Logo :size="40" />
+        <span class="hidden font-display text-[1.05rem] font-bold tracking-tight sm:block">
+          Prosper Edafe
+        </span>
       </router-link>
 
-      <!-- Desktop Navigation -->
-      <nav class="hidden md:flex space-x-8">
+      <nav class="hidden items-center gap-9 md:flex" aria-label="Main">
         <router-link
-          v-for="item in [
-            { path: '/', label: 'Home' },
-            { path: '/about', label: 'About' },
-            { path: '/projects', label: 'Projects' },
-            { path: '/contact', label: 'Contact' },
-          ]"
-          :key="item.path"
-          :to="item.path"
-          :class="[
-            'font-medium transition-colors duration-300 hover:text-primary-500',
-            isActive(item.path)
-              ? 'text-primary-500'
-              : 'text-gray-800 dark:text-gray-200',
-          ]"
+          v-for="item in nav"
+          :key="item.to"
+          :to="item.to"
+          class="nav-link"
+          :class="{ 'is-active': isActive(item.to) }"
         >
-          {{ item.label }}
+          <span class="roll">
+            <span>{{ item.label }}</span>
+            <span aria-hidden="true">{{ item.label }}</span>
+          </span>
         </router-link>
       </nav>
 
-      <!-- Dark mode toggle -->
-      <button
-        @click="emit('toggle-dark-mode')"
-        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-        aria-label="Toggle dark mode"
-      >
-        <svg
-          v-if="props.isDarkMode"
-          xmlns="http://www.w3.org/2000/svg"
-          class="h-6 w-6 text-yellow-400"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-          />
-        </svg>
-        <svg
-          v-else
-          xmlns="http://www.w3.org/2000/svg"
-          class="h-6 w-6 text-gray-700"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-          />
-        </svg>
-      </button>
-
-      <!-- Mobile menu button -->
-      <button
-        @click="toggleMenu"
-        class="p-2 rounded-md md:hidden focus:outline-none"
-        aria-label="Toggle menu"
-      >
-        <svg
-          v-if="!isMenuOpen"
-          xmlns="http://www.w3.org/2000/svg"
-          class="h-6 w-6 text-gray-800 dark:text-gray-200"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M4 6h16M4 12h16M4 18h16"
-          />
-        </svg>
-        <svg
-          v-else
-          xmlns="http://www.w3.org/2000/svg"
-          class="h-6 w-6 text-gray-800 dark:text-gray-200"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M6 18L18 6M6 6l12 12"
-          />
-        </svg>
-      </button>
-    </div>
-
-    <!-- Mobile menu -->
-    <div
-      v-if="isMenuOpen"
-      class="md:hidden bg-white dark:bg-gray-800 absolute top-full left-0 w-full shadow-lg py-2 transition-all duration-300"
-      v-motion
-      :initial="{ opacity: 0, y: -20 }"
-      :enter="{ opacity: 1, y: 0, transition: { duration: 300 } }"
-    >
-      <div class="container flex flex-col space-y-3 py-3">
-        <router-link
-          v-for="item in [
-            { path: '/', label: 'Home' },
-            { path: '/about', label: 'About' },
-            { path: '/projects', label: 'Projects' },
-            { path: '/contact', label: 'Contact' },
-          ]"
-          :key="item.path"
-          :to="item.path"
-          :class="[
-            'py-2 px-4 font-medium rounded-md transition-colors',
-            isActive(item.path)
-              ? 'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400'
-              : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200',
-          ]"
-          @click="isMenuOpen = false"
-        >
-          {{ item.label }}
+      <div class="flex items-center gap-2">
+        <router-link v-magnetic="0.25" to="/contact" class="btn btn-accent hidden !px-5 !py-3 md:inline-flex">
+          Let's talk <ArrowIcon :size="11" />
         </router-link>
+
+        <button
+          class="burger md:hidden"
+          :class="{ 'is-open': open }"
+          :aria-expanded="open"
+          aria-controls="mobile-menu"
+          aria-label="Toggle menu"
+          @click="toggle"
+        >
+          <span></span>
+          <span></span>
+        </button>
       </div>
     </div>
   </header>
+
+  <!-- Full-screen mobile menu -->
+  <div id="mobile-menu" ref="menu" class="mobile-menu md:hidden" :aria-hidden="!open">
+    <div class="flex h-full flex-col justify-between px-gutter pb-8 pt-28">
+      <nav class="flex flex-col" aria-label="Mobile">
+        <span class="menu-fade label mb-6">Menu</span>
+        <router-link
+          v-for="(item, i) in nav"
+          :key="item.to"
+          :to="item.to"
+          class="menu-link"
+          :class="{ 'is-active': isActive(item.to) }"
+          :tabindex="open ? 0 : -1"
+        >
+          <span class="menu-link-inner">
+            <sup>0{{ i + 1 }}</sup>{{ item.label }}
+          </span>
+        </router-link>
+      </nav>
+
+      <div>
+        <div class="menu-fade mb-6 h-px w-full bg-ink/20"></div>
+        <div class="flex flex-wrap gap-x-6 gap-y-2">
+          <a
+            v-for="s in socials"
+            :key="s.label"
+            :href="s.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="menu-fade font-mono text-xs uppercase tracking-[0.14em]"
+            :tabindex="open ? 0 : -1"
+          >
+            {{ s.label }} ↗
+          </a>
+        </div>
+        <p class="menu-fade mt-6 font-mono text-[0.68rem] uppercase tracking-[0.14em] opacity-60">
+          {{ site.location }}
+        </p>
+      </div>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.nav-bar {
+  max-width: 100%;
+  border: 1px solid transparent;
+}
+.nav-bar.is-scrolled {
+  background: rgba(17, 17, 19, 0.72);
+  border-color: var(--line);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.nav-link {
+  position: relative;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(237, 232, 223, 0.7);
+  transition: color 0.3s;
+}
+.nav-link:hover,
+.nav-link.is-active {
+  color: var(--bone);
+}
+.nav-link::before {
+  content: '';
+  position: absolute;
+  left: -0.85rem;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: scale(0);
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nav-link.is-active::before {
+  transform: scale(1);
+}
+
+.burger {
+  position: relative;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+@media (min-width: 768px) {
+  .burger {
+    display: none;
+  }
+}
+.burger span {
+  position: absolute;
+  width: 18px;
+  height: 1.5px;
+  background: var(--ink);
+  transition: transform 0.5s cubic-bezier(0.76, 0, 0.24, 1);
+}
+.burger span:first-child {
+  transform: translateY(-3.5px);
+}
+.burger span:last-child {
+  transform: translateY(3.5px);
+}
+.burger.is-open {
+  background: var(--ink);
+}
+.burger.is-open span {
+  background: var(--accent);
+}
+.burger.is-open span:first-child {
+  transform: rotate(45deg);
+}
+.burger.is-open span:last-child {
+  transform: rotate(-45deg);
+}
+
+.mobile-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  visibility: hidden;
+  background: var(--accent);
+  color: var(--ink);
+  clip-path: circle(0% at calc(100% - 2.5rem) 2.5rem);
+}
+.menu-link {
+  display: block;
+  overflow: hidden;
+  padding: 0.1em 0 0.16em;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 800;
+  font-size: clamp(3rem, 15vw, 5.5rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+.menu-link-inner {
+  display: inline-block;
+}
+.menu-link sup {
+  margin-right: 0.6em;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 400;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  vertical-align: top;
+  position: relative;
+  top: 1.4em;
+}
+.menu-link.is-active .menu-link-inner {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+</style>

@@ -1,251 +1,257 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, onUnmounted, ref } from 'vue'
+import { gsap, reduced, whenReady } from '../lib/gsap'
+import { experience, site, stack } from '../data/site'
+import portrait from '../assets/prosper-about.webp'
+import ArrowIcon from '../components/ArrowIcon.vue'
+import Marquee from '../components/Marquee.vue'
 
-const experienceItems = ref([
-  {
-    company: "Dosh Services",
-    position: "Frontend Engineer",
-    period: "November 2022 – December 2024",
-    description:
-      "Developed responsive and accessible web and mobile applications using modern JavaScript frameworks and libraries. Contributed to the design and implementation of scalable frontend architectures.",
-    skills: [
-      "TypeScript",
-      "React",
-      "React Native",
-      "Responsive Design",
-      "REST APIs",
-      "WebSockets",
-    ],
-  },
-  {
-    company: "OyaSync Ltd",
-    position: "Software Engineer",
-    period: "November 2024 – May 2025",
-    description:
-      "Designing, building, and maintaining desktop applications for business sales management using Electron. Also contributed to the development of internal web applications.",
-    skills: ["React", "TypeScript", "Electron", "REST APIs"],
-  },
-]);
+const root = ref<HTMLElement | null>(null)
+let ctx: gsap.Context | null = null
 
-// const educationItems = ref([
-//   {
-//     institution: "University of Technology",
-//     degree: "Bachelor of Science in Computer Science",
-//     period: "2017 - 2021",
-//     description:
-//       "Specialized in software development with a focus on web technologies and computer programming.",
-//   },
-// ]);
+const principles = ['Ship it', 'Sweat the details', 'Keep it fast', 'Own the outcome', 'Stay curious']
+
+onMounted(() => {
+  if (reduced || !root.value) return
+  ctx = gsap.context((self) => {
+    const q = self.selector!
+
+    // Portrait: the frame wipes open while the photo settles back.
+    gsap.set(q('.about-photo'), { clipPath: 'inset(100% 0% 0% 0% round 1.5rem)' })
+    gsap.set(q('.about-photo img'), { scale: 1.45 })
+    whenReady(() => {
+      gsap.to(q('.about-photo'), { clipPath: 'inset(0% 0% 0% 0% round 1.5rem)', duration: 1.5, ease: 'snap', delay: 0.2 })
+      gsap.to(q('.about-photo img'), { scale: 1.15, duration: 2, delay: 0.2 })
+    })
+    gsap.to(q('.about-photo img'), {
+      yPercent: 9,
+      ease: 'none',
+      scrollTrigger: { trigger: q('.about-photo')[0], start: 'top bottom', end: 'bottom top', scrub: true },
+    })
+
+    // Timeline: the spine fills as you scroll past, entries slide in beside it.
+    gsap.fromTo(
+      q('.timeline-fill'),
+      { scaleY: 0 },
+      {
+        scaleY: 1,
+        ease: 'none',
+        scrollTrigger: { trigger: q('.timeline')[0], start: 'top 70%', end: 'bottom 60%', scrub: 0.5 },
+      },
+    )
+    q('.timeline-item').forEach((item: HTMLElement) => {
+      gsap
+        .timeline({ scrollTrigger: { trigger: item, start: 'top 82%', once: true } })
+        .from(item.querySelector('.timeline-dot'), { scale: 0, duration: 0.8, ease: 'elastic.out(1, 0.5)' })
+        .from(item.querySelectorAll('.timeline-up'), { yPercent: 120, duration: 1, stagger: 0.07 }, 0.05)
+        .from(item.querySelectorAll('.timeline-fade'), { autoAlpha: 0, y: 22, duration: 0.9, stagger: 0.06 }, 0.3)
+    })
+
+    // Stack: chips pop in group by group.
+    q('.stack-group').forEach((group: HTMLElement) => {
+      gsap.from(group.querySelectorAll('.chip'), {
+        autoAlpha: 0,
+        y: 16,
+        scale: 0.85,
+        duration: 0.6,
+        stagger: 0.035,
+        scrollTrigger: { trigger: group, start: 'top 90%', once: true },
+      })
+    })
+  }, root.value)
+})
+
+onUnmounted(() => ctx?.revert())
 </script>
 
 <template>
-  <div class="pt-16">
-    <section class="section">
-      <div class="container">
-        <div class="section-heading">
-          <h2 class="text-primary-600 dark:text-primary-400">About Me</h2>
+  <div ref="root">
+    <!-- Header -->
+    <section class="px-gutter pt-36 md:pt-44">
+      <p v-reveal class="label mb-6">(About) — {{ site.location }}</p>
+      <h1 class="display text-[clamp(3.2rem,13vw,13.5rem)] uppercase">
+        <span v-chars="{ start: 'top 100%' }" class="block">Engineer</span>
+        <span v-chars="{ start: 'top 100%', delay: 0.12 }" class="serif-i block normal-case text-accent">by obsession.</span>
+      </h1>
+    </section>
+
+    <!-- Bio -->
+    <section class="grid gap-12 px-gutter py-section lg:grid-cols-12 lg:gap-16">
+      <div class="lg:col-span-5">
+        <div class="about-photo">
+          <img :src="portrait" alt="Prosper Edafe" width="1100" height="1412" />
+        </div>
+        <div v-reveal class="mt-5 flex items-center justify-between">
+          <span class="label">Prosper Edafe</span>
+          <span class="label">In tech since {{ site.startedYear }}</span>
+        </div>
+      </div>
+
+      <div class="lg:col-span-7 lg:pt-6">
+        <p v-lines class="about-lead">
+          I'm Prosper, a software engineer in Lagos. I got into tech in the middle of 2021, and what began
+          as curiosity became the thing I do every day.
+        </p>
+
+        <div class="mt-10 grid gap-6 text-lg text-bone/75 md:grid-cols-2 md:gap-10">
+          <p v-lines>
+            I started on the frontend, turning a design or a rough idea into an interface that feels
+            quick and obvious. Over time the work pulled me further out, into mobile apps with React
+            Native and Expo, desktop software with Electron, and the databases and payment flows behind
+            them.
+          </p>
+          <p v-lines="{ delay: 0.1 }">
+            Now I take products from the first commit to the day they ship. I care about the parts people
+            notice, like speed and polish, and the parts they don't, like clean data models and code the
+            next engineer can read. The goal is always the same: software a business can depend on.
+          </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
-          <div
-            v-motion
-            :initial="{ opacity: 0, x: -50 }"
-            :enter="{ opacity: 1, x: 0, transition: { delay: 200 } }"
-          >
-            <img
-              src="/prosper.jpg"
-              alt="Professional profile photo"
-              class="rounded-lg shadow-xl w-full h-auto object-cover"
-            />
-          </div>
-
-          <div
-            v-motion
-            :initial="{ opacity: 0, y: 50 }"
-            :enter="{ opacity: 1, y: 0, transition: { delay: 300 } }"
-          >
-            <h3 class="text-2xl font-bold mb-4">Prosper Edafe</h3>
-            <p class="text-lg mb-6 text-gray-700 dark:text-gray-300">
-              I'm a passionate frontend developer with expertise in building
-              beautiful, responsive web applications using modern technologies.
-            </p>
-            <p class="text-lg mb-6 text-gray-700 dark:text-gray-300">
-              With several years of experience in web development, I specialize
-              in creating performant and user-friendly interfaces that provide
-              exceptional user experiences.
-            </p>
-            <p class="text-lg mb-6 text-gray-700 dark:text-gray-300">
-              My approach combines clean code, modern design principles, and the
-              latest web technologies to build applications that not only look
-              great but also perform exceptionally well.
-            </p>
-
-            <div class="flex flex-wrap gap-3 mt-8">
-              <a
-                href="https://github.com/Prosperedafe"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="btn btn-primary"
-              >
-                <svg
-                  class="w-5 h-5 mr-2"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
-                  />
-                </svg>
-                GitHub
-              </a>
-              <a
-                href="https://www.linkedin.com/in/edafe-prosper-b046ba239/"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="btn btn-secondary"
-              >
-                <svg
-                  class="w-5 h-5 mr-2"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"
-                  />
-                </svg>
-                LinkedIn
-              </a>
-              <a
-                href="/Prosper-Edafe-resume.pdf"
-                target="_blank"
-                class="btn btn-outline"
-              >
-                <svg
-                  class="w-5 h-5 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  ></path>
-                </svg>
-                Resume
-              </a>
-            </div>
-          </div>
+        <div v-reveal class="mt-12 flex flex-wrap gap-3">
+          <a v-magnetic="0.25" :href="site.resume" target="_blank" class="btn btn-accent">
+            Download résumé <ArrowIcon :size="12" />
+          </a>
+          <a v-magnetic="0.25" :href="site.github" target="_blank" rel="noopener noreferrer" class="btn btn-ghost">GitHub</a>
+          <a v-magnetic="0.25" :href="site.linkedin" target="_blank" rel="noopener noreferrer" class="btn btn-ghost">LinkedIn</a>
         </div>
       </div>
     </section>
 
-    <!-- Experience Section -->
-    <section class="section bg-gray-50 dark:bg-gray-800">
-      <div class="container">
-        <div class="section-heading">
-          <h2 class="text-primary-600 dark:text-primary-400">
-            Work Experience
-          </h2>
-        </div>
+    <div class="border-y border-line py-6">
+      <Marquee :items="principles" :duration="36" outline />
+    </div>
 
-        <div class="space-y-12">
-          <div
-            v-for="(item, index) in experienceItems"
-            :key="index"
-            class="card p-8"
-            v-motion
-            :initial="{ opacity: 0, y: 50 }"
-            :enter="{
-              opacity: 1,
-              y: 0,
-              transition: { delay: index * 100 + 200 },
-            }"
-          >
-            <div
-              class="flex flex-col md:flex-row md:justify-between md:items-start mb-4"
-            >
-              <div>
-                <h3
-                  class="text-xl font-bold text-primary-600 dark:text-primary-400"
-                >
+    <!-- Experience -->
+    <section class="px-gutter py-section">
+      <div class="mb-16 grid gap-8 lg:grid-cols-12 lg:items-end">
+        <p v-reveal class="label lg:col-span-4">(Experience)</p>
+        <h2 class="display text-[clamp(2.8rem,7.5vw,7.5rem)] lg:col-span-8">
+          <span v-chars class="block">Where I've</span>
+          <span v-chars="{ delay: 0.1 }" class="serif-i block text-accent">been building.</span>
+        </h2>
+      </div>
+
+      <div class="timeline">
+        <span class="timeline-spine"><span class="timeline-fill"></span></span>
+
+        <article v-for="item in experience" :key="item.company" class="timeline-item">
+          <span class="timeline-dot"></span>
+          <div class="grid gap-4 lg:grid-cols-12 lg:gap-8">
+            <div class="lg:col-span-4">
+              <div class="overflow-hidden">
+                <p class="timeline-up label inline-block !text-accent">{{ item.period }}</p>
+              </div>
+              <p class="timeline-fade mt-2 text-sm text-mute">{{ item.location }}</p>
+            </div>
+            <div class="lg:col-span-8">
+              <div class="overflow-hidden pb-1">
+                <h3 class="timeline-up font-display text-[clamp(1.8rem,3.6vw,3.2rem)] font-extrabold leading-none tracking-tight">
                   {{ item.position }}
                 </h3>
-                <p class="text-lg font-medium text-gray-800 dark:text-gray-200">
-                  {{ item.company }}
-                </p>
               </div>
-              <p class="text-gray-600 dark:text-gray-400 mt-2 md:mt-0">
-                {{ item.period }}
-              </p>
-            </div>
-
-            <p class="text-gray-700 dark:text-gray-300 mb-4">
-              {{ item.description }}
-            </p>
-
-            <div class="flex flex-wrap gap-2 mt-4">
-              <span
-                v-for="skill in item.skills"
-                :key="skill"
-                class="px-3 py-1 bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400 rounded-full text-sm"
-              >
-                {{ skill }}
-              </span>
+              <div class="overflow-hidden">
+                <p class="timeline-up serif-i mt-2 text-2xl text-bone/70">{{ item.company }}</p>
+              </div>
+              <p class="timeline-fade mt-5 max-w-[40rem] text-lg text-bone/75">{{ item.description }}</p>
+              <div class="timeline-fade mt-6 flex flex-wrap gap-2">
+                <span v-for="s in item.skills" :key="s" class="chip">{{ s }}</span>
+              </div>
             </div>
           </div>
-        </div>
+        </article>
       </div>
     </section>
 
-    <!-- Education Section -->
-    <!-- <section class="section">
-      <div class="container">
-        <div class="section-heading">
-          <h2 class="text-primary-600 dark:text-primary-400">Education</h2>
-        </div>
+    <!-- Stack -->
+    <section class="px-gutter pb-section">
+      <div class="mb-14 grid gap-8 lg:grid-cols-12 lg:items-end">
+        <p v-reveal class="label lg:col-span-4">(Toolbox)</p>
+        <h2 class="display text-[clamp(2.8rem,7.5vw,7.5rem)] lg:col-span-8">
+          <span v-chars class="block">What I</span>
+          <span v-chars="{ delay: 0.1 }" class="serif-i block text-accent">work with.</span>
+        </h2>
+      </div>
 
-        <div class="space-y-12">
-          <div
-            v-for="(item, index) in educationItems"
-            :key="index"
-            class="card p-8"
-            v-motion
-            :initial="{ opacity: 0, y: 50 }"
-            :enter="{
-              opacity: 1,
-              y: 0,
-              transition: { delay: index * 100 + 200 },
-            }"
-          >
-            <div
-              class="flex flex-col md:flex-row md:justify-between md:items-start mb-4"
-            >
-              <div>
-                <h3
-                  class="text-xl font-bold text-primary-600 dark:text-primary-400"
-                >
-                  {{ item.degree }}
-                </h3>
-                <p class="text-lg font-medium text-gray-800 dark:text-gray-200">
-                  {{ item.institution }}
-                </p>
-              </div>
-              <p class="text-gray-600 dark:text-gray-400 mt-2 md:mt-0">
-                {{ item.period }}
-              </p>
+      <div>
+        <div v-for="g in stack" :key="g.group" class="stack-group">
+          <div v-rule class="rule"></div>
+          <div class="grid gap-4 py-7 lg:grid-cols-12 lg:gap-8">
+            <h3 v-reveal class="font-display text-2xl font-bold tracking-tight lg:col-span-4">{{ g.group }}</h3>
+            <div class="flex flex-wrap gap-2 lg:col-span-8">
+              <span v-for="t in g.items" :key="t" class="chip !px-4 !py-2 !text-[0.72rem]">{{ t }}</span>
             </div>
-
-            <p class="text-gray-700 dark:text-gray-300">
-              {{ item.description }}
-            </p>
           </div>
         </div>
+        <div v-rule class="rule"></div>
       </div>
-    </section> -->
+    </section>
   </div>
 </template>
+
+<style scoped>
+.about-photo {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  border-radius: 1.5rem;
+  will-change: clip-path;
+}
+.about-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 20%;
+  filter: saturate(0.92);
+}
+.about-lead {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 500;
+  font-size: clamp(1.6rem, 3.1vw, 2.9rem);
+  line-height: 1.14;
+  letter-spacing: -0.03em;
+}
+
+.timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+.timeline-spine {
+  position: absolute;
+  left: 4px;
+  top: 0.6rem;
+  bottom: 0;
+  width: 1px;
+  background: rgba(237, 232, 223, 0.14);
+}
+.timeline-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform-origin: top;
+}
+.timeline-item {
+  position: relative;
+  padding-bottom: clamp(3rem, 6vw, 5.5rem);
+}
+.timeline-item:last-child {
+  padding-bottom: 0;
+}
+.timeline-dot {
+  position: absolute;
+  left: calc(-2rem + 0.5px);
+  top: 0.35rem;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 5px var(--ink);
+}
+@media (min-width: 1024px) {
+  .timeline {
+    padding-left: 3rem;
+  }
+  .timeline-dot {
+    left: calc(-3rem + 0.5px);
+  }
+}
+</style>

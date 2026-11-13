@@ -1,309 +1,333 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
-import { useRouter } from "vue-router";
-import gsap from "gsap";
+import { onMounted, onUnmounted, ref } from 'vue'
+import { gsap, SplitText, isTouch, reduced, whenReady } from '../lib/gsap'
+import { site } from '../data/site'
+import portrait from '../assets/prosper-hero.webp'
+import ArrowIcon from './ArrowIcon.vue'
 
-const router = useRouter();
+const root = ref<HTMLElement | null>(null)
+const time = ref('')
+let ctx: gsap.Context | null = null
+let timer: number | undefined
 
-const navigateTo = (path: string) => {
-  router.push(path);
-};
+function tick() {
+  time.value = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: site.timeZone,
+  }).format(new Date())
+}
 
-onMounted(() => {
-  // Animate hero elements
-  gsap.from(".hero-title", {
-    opacity: 0,
-    y: 50,
-    duration: 1,
-    ease: "power3.out",
-  });
+onMounted(async () => {
+  tick()
+  timer = window.setInterval(tick, 15000)
+  if (reduced || !root.value) return
+  // The preloader also waits for the fonts, so this resolves before the hero is uncovered.
+  await document.fonts.ready
+  if (!root.value) return
 
-  gsap.from(".hero-subtitle", {
-    opacity: 0,
-    y: 30,
-    duration: 1,
-    delay: 0.3,
-    ease: "power3.out",
-  });
+  ctx = gsap.context((self) => {
+    const q = self.selector!
+    const first = new SplitText(q('.hero-first'), { type: 'chars' })
+    const last = new SplitText(q('.hero-last'), { type: 'chars' })
 
-  gsap.from(".hero-buttons", {
-    opacity: 0,
-    y: 30,
-    duration: 1,
-    delay: 0.5,
-    ease: "power3.out",
-  });
+    gsap.set(q('.hero-portrait'), { clipPath: 'inset(100% 0% 0% 0% round 1.5rem)' })
+    gsap.set(q('.hero-portrait img'), { scale: 1.5 })
 
-  gsap.from(".hero-image", {
-    opacity: 0,
-    x: 50,
-    duration: 1,
-    delay: 0.7,
-    ease: "power3.out",
-  });
-});
+    /* ---------- Entrance ---------- */
+    const intro = gsap
+      .timeline({ paused: true, defaults: { ease: 'silk' } })
+      .from(first.chars, { yPercent: 120, rotate: 10, duration: 1.3, stagger: 0.045 }, 0)
+      .from(last.chars, { yPercent: 120, rotate: 10, duration: 1.3, stagger: 0.045 }, 0.18)
+      .to(
+        q('.hero-portrait'),
+        { clipPath: 'inset(0% 0% 0% 0% round 1.5rem)', duration: 1.5, ease: 'snap' },
+        0.25,
+      )
+      .to(q('.hero-portrait img'), { scale: 1.12, duration: 1.9 }, 0.25)
+      .from(q('.hero-role'), { autoAlpha: 0, duration: 0.2 }, 0.7)
+      .to(
+        q('.hero-role-text'),
+        {
+          duration: 1.3,
+          scrambleText: { text: 'Software Engineer', chars: 'upperAndLowerCase', speed: 0.4 },
+          ease: 'none',
+        },
+        0.7,
+      )
+      .from(q('.hero-meta > *'), { autoAlpha: 0, y: 16, duration: 0.9, stagger: 0.08 }, 0.75)
+      .from(q('.hero-cta > *'), { autoAlpha: 0, y: 24, duration: 0.9, stagger: 0.1 }, 1.1)
+      .from(q('.hero-badge'), { scale: 0, rotate: -120, duration: 1.4, ease: 'elastic.out(1, 0.6)' }, 1)
+      .from(q('.hero-glow'), { autoAlpha: 0, scale: 0.6, duration: 2 }, 0.2)
+
+    // The paragraph is split by line. autoSplit re-measures it if the web font
+    // arrives late or the window is resized, so lines never break in odd places.
+    gsap.set(q('.hero-copy'), { autoAlpha: 0 })
+    whenReady(() => {
+      intro.play()
+      gsap.set(q('.hero-copy'), { autoAlpha: 1 })
+      SplitText.create(q('.hero-copy'), {
+        type: 'lines',
+        mask: 'lines',
+        linesClass: 'sl',
+        autoSplit: true,
+        onSplit: (split) => gsap.from(split.lines, { yPercent: 135, duration: 1.1, stagger: 0.08, delay: 0.9 }),
+      })
+    })
+
+    /* ---------- Always-on motion ---------- */
+    gsap.to(q('.hero-badge-ring'), { rotate: 360, duration: 16, ease: 'none', repeat: -1 })
+
+    /* ---------- Scroll: the two names pull apart, the portrait drifts ---------- */
+    const scrub = { trigger: root.value, start: 'top top', end: 'bottom top', scrub: 0.6 }
+    gsap.to(q('.hero-line-1'), { xPercent: -9, ease: 'none', scrollTrigger: { ...scrub } })
+    gsap.to(q('.hero-line-2'), { xPercent: 9, ease: 'none', scrollTrigger: { ...scrub } })
+    // Desktop only: on phones the hero is taller than the screen, so the intro text and
+    // buttons sit below the fold and must stay visible while you scroll down to them.
+    const desktop = gsap.matchMedia()
+    desktop.add('(min-width: 1024px)', () => {
+      gsap.to(q('.hero-portrait-wrap'), { yPercent: -14, ease: 'none', scrollTrigger: { ...scrub } })
+      gsap.to(q('.hero-bottom'), { autoAlpha: 0, y: -40, ease: 'none', scrollTrigger: { ...scrub, end: '45% top' } })
+    })
+    self.add(() => () => desktop.revert())
+
+    /* ---------- Pointer: the portrait tilts, the glow follows ---------- */
+    if (!isTouch) {
+      const tiltX = gsap.quickTo(q('.hero-portrait'), 'rotationY', { duration: 0.9, ease: 'power3.out' })
+      const tiltY = gsap.quickTo(q('.hero-portrait'), 'rotationX', { duration: 0.9, ease: 'power3.out' })
+      const imgX = gsap.quickTo(q('.hero-portrait img'), 'x', { duration: 1.1, ease: 'power3.out' })
+      const imgY = gsap.quickTo(q('.hero-portrait img'), 'y', { duration: 1.1, ease: 'power3.out' })
+      const glowX = gsap.quickTo(q('.hero-glow'), 'x', { duration: 1.6, ease: 'power3.out' })
+      const glowY = gsap.quickTo(q('.hero-glow'), 'y', { duration: 1.6, ease: 'power3.out' })
+
+      const move = (e: MouseEvent) => {
+        const nx = e.clientX / window.innerWidth - 0.5
+        const ny = e.clientY / window.innerHeight - 0.5
+        tiltX(nx * 12)
+        tiltY(ny * -10)
+        imgX(nx * -22)
+        imgY(ny * -22)
+        glowX(nx * window.innerWidth * 0.5)
+        glowY(ny * window.innerHeight * 0.5)
+      }
+      window.addEventListener('mousemove', move, { passive: true })
+      self.add(() => () => window.removeEventListener('mousemove', move))
+    }
+  }, root.value)
+})
+
+onUnmounted(() => {
+  window.clearInterval(timer)
+  ctx?.revert()
+})
 </script>
 
 <template>
-  <section class="relative pt-32 pb-24 lg:pt-48 lg:pb-32 overflow-hidden">
-    <!-- Background Elements -->
-    <div class="absolute top-0 left-0 w-full h-full overflow-hidden">
-      <div
-        class="absolute top-0 right-0 w-1/3 h-1/3 bg-primary-100 dark:bg-primary-900 rounded-bl-full opacity-20"
-      ></div>
-      <div
-        class="absolute bottom-0 left-0 w-1/4 h-1/4 bg-secondary-100 dark:bg-secondary-900 rounded-tr-full opacity-20"
-      ></div>
+  <section ref="root" class="hero relative flex min-h-[100svh] flex-col overflow-hidden px-gutter pb-8 pt-28 md:pt-32">
+    <!-- Backdrop -->
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="hero-glow" aria-hidden="true"></div>
+
+    <!-- Meta row -->
+    <div class="hero-meta relative z-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
+      <p class="label flex items-center gap-2.5 !text-bone">
+        <span class="relative flex h-2 w-2">
+          <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70"></span>
+          <span class="relative inline-flex h-2 w-2 rounded-full bg-accent"></span>
+        </span>
+        Available for new projects
+      </p>
+      <p class="label hidden sm:block">{{ site.location }} — {{ time }} WAT</p>
+      <p class="label hidden lg:block">Portfolio / 2026</p>
     </div>
 
-    <div class="container relative z-10">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-        <div>
-          <h1
-            class="hero-title text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6"
-          >
-            Hi, I'm
-            <span class="text-primary-600 dark:text-primary-400"
-              >Prosper Edafe</span
-            >
-          </h1>
+    <!-- Name + portrait -->
+    <div class="relative z-10 mt-8 flex-1 md:mt-10">
+      <h1 class="hero-title display" aria-label="Prosper Edafe, Software Engineer">
+        <span class="hero-line-1 mask" aria-hidden="true">
+          <span class="hero-first">Prosper</span>
+        </span>
+        <span class="hero-line-2 mask" aria-hidden="true">
+          <span class="hero-last">Edafe</span>
+          <span class="hero-role serif-i">
+            <span class="hero-role-text">Software Engineer</span>
+          </span>
+        </span>
+      </h1>
 
-          <p
-            class="hero-subtitle text-xl text-gray-700 dark:text-gray-300 mb-8"
-          >
-            A dedicated Frontend Engineer with a strong engineering mindset,
-            focused on designing and developing robust, scalable, and
-            user-friendly Web, Mobile, and Desktop applications using modern
-            technologies.
-          </p>
-
-          <div class="hero-buttons flex flex-wrap gap-4">
-            <button @click="navigateTo('/projects')" class="btn btn-primary">
-              <svg
-                class="w-5 h-5 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-                ></path>
-              </svg>
-              View Projects
-            </button>
-
-            <button @click="navigateTo('/contact')" class="btn btn-outline">
-              <svg
-                class="w-5 h-5 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                ></path>
-              </svg>
-              Contact Me
-            </button>
-          </div>
-
-          <div class="mt-12 flex items-center">
-            <span class="text-gray-600 dark:text-gray-400 mr-6"
-              >Tech Stack:</span
-            >
-            <div class="flex space-x-4">
-              <!-- Tech stack icons -->
-
-              <div
-                class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-primary-500"
-                title="React/React Native"
-              >
-                <svg
-                  width="64"
-                  height="64"
-                  viewBox="0 0 64 64"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <circle cx="32" cy="32" r="6" fill="#2563EB" />
-                  <g stroke="#2563EB" stroke-width="2" fill="none">
-                    <ellipse
-                      rx="20"
-                      ry="8"
-                      cx="32"
-                      cy="32"
-                      transform="rotate(0 32 32)"
-                    />
-                    <ellipse
-                      rx="20"
-                      ry="8"
-                      cx="32"
-                      cy="32"
-                      transform="rotate(60 32 32)"
-                    />
-                    <ellipse
-                      rx="20"
-                      ry="8"
-                      cx="32"
-                      cy="32"
-                      transform="rotate(120 32 32)"
-                    />
-                  </g>
-                </svg>
-              </div>
-              <div
-                class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-primary-500"
-                title="Electron"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 122.88 122.88"
-                >
-                  <title>electron</title>
-                  <path
-                    d="M122.88,61.44a61.44,61.44,0,1,0-61.44,61.44,61.44,61.44,0,0,0,61.44-61.44Z"
-                    style="fill: #374151; fill-rule: evenodd"
-                  />
-                  <path
-                    d="M48.24,34.41c-12.48-2.27-22.35.11-26.28,6.92-2.94,5.09-2.1,11.83,2,19a1.28,1.28,0,1,0,2.22-1.27c-3.72-6.49-4.44-12.31-2-16.48,3.27-5.66,12.07-7.78,23.61-5.68L48,37a1.28,1.28,0,0,0,.25-2.54ZM30,71.64A80.13,80.13,0,0,0,49.11,86.7C67.21,97.16,86.49,100,96,93.47a1.26,1.26,0,0,0,.58-1.07,1.28,1.28,0,0,0-2-1C86,97.16,67.73,94.5,50.39,84.49A77.33,77.33,0,0,1,31.92,69.91a1.33,1.33,0,0,0-1-.42,1.28,1.28,0,0,0-1.28,1.28,1.33,1.33,0,0,0,.33.87Z"
-                    style="fill: #3b82f6"
-                  />
-                  <path
-                    d="M93.42,67.56c8.17-9.65,11-19.37,7.1-26.16-2.89-5-9-7.65-17.11-7.75a1.28,1.28,0,0,0,0,2.56c7.3.09,12.56,2.37,14.92,6.47,3.26,5.64.72,14.3-6.84,23.23a1.28,1.28,0,1,0,2,1.65Zm-23-34.38a80.12,80.12,0,0,0-22.81,9C29,53,16.76,68.93,18.46,80.47A1.28,1.28,0,0,0,21,80.1C19.48,69.85,31,54.77,48.93,44.44A77.24,77.24,0,0,1,71,35.69a1.28,1.28,0,0,0-.24-2.54,1.36,1.36,0,0,0-.29,0Z"
-                    style="fill: #3b82f6"
-                  />
-                  <path
-                    d="M42.13,90.12c4.27,11.93,11.26,19.28,19.13,19.28,5.73,0,11-3.91,15.17-10.79a1.21,1.21,0,0,0,.19-.67,1.28,1.28,0,0,0-2.38-.65c-3.72,6.19-8.29,9.55-13,9.55-6.53,0-12.77-6.55-16.72-17.58a1.28,1.28,0,0,0-2.49.41,1.16,1.16,0,0,0,.08.45Zm41.44-3.19A80.15,80.15,0,0,0,87,63.2C87,42,79.55,23.72,69,19a1.34,1.34,0,0,0-.49-.1,1.28,1.28,0,0,0-.55,2.44C77.37,25.55,84.42,42.9,84.42,63.2a77.92,77.92,0,0,1-3.29,23,1.34,1.34,0,0,0-.06.4,1.28,1.28,0,0,0,1.28,1.28,1.29,1.29,0,0,0,1.23-.92Zm21.67-2A6.13,6.13,0,1,0,99.11,91a6.12,6.12,0,0,0,6.13-6.12Zm-2.56,0a3.57,3.57,0,1,1-3.57-3.57,3.56,3.56,0,0,1,3.57,3.57Zm-79.4,7.75a6.13,6.13,0,1,0-6.13-6.13,6.13,6.13,0,0,0,6.13,6.13Zm0-2.56a3.57,3.57,0,1,1,3.57-3.57,3.57,3.57,0,0,1-3.57,3.57Z"
-                    style="fill: #3b82f6"
-                  />
-                  <path
-                    d="M61.26,26.13A6.13,6.13,0,1,0,55.13,20a6.12,6.12,0,0,0,6.13,6.12Zm0-2.56A3.57,3.57,0,1,1,64.82,20a3.56,3.56,0,0,1-3.56,3.56Zm.93,37.69a4.43,4.43,0,0,1-5.27-3.39,4.92,4.92,0,0,1-.1-.94,4.43,4.43,0,1,1,5.37,4.33Z"
-                    style="fill: #3b82f6"
-                  />
-                </svg>
-              </div>
-
-              <div
-                class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-primary-500"
-                title="Next.js"
-              >
-                <svg
-                  viewBox="0 0 512 512"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill-rule="evenodd"
-                  clip-rule="evenodd"
-                  stroke-linejoin="round"
-                  stroke-miterlimit="2"
-                >
-                  <g transform="translate(.722 .64) scale(6.375)">
-                    <circle fill="#374151" cx="40" cy="40" r="40" />
-                    <path
-                      d="M66.448 70.009L30.73 24H24v31.987h5.384v-25.15l32.838 42.427a40.116 40.116 0 004.226-3.255z"
-                      fill="url(#prefix___Linear1)"
-                      fill-rule="nonzero"
-                    />
-                    <path
-                      fill="url(#prefix___Linear2)"
-                      d="M51.111 24h5.333v32h-5.333z"
-                    />
-                  </g>
-                  <defs>
-                    <linearGradient
-                      id="prefix___Linear1"
-                      x1="0"
-                      y1="0"
-                      x2="1"
-                      y2="0"
-                      gradientUnits="userSpaceOnUse"
-                      gradientTransform="rotate(51.103 -29.93 76.555) scale(25.1269)"
-                    >
-                      <stop offset="0" stop-color="#3b82f6" />
-                      <stop offset="1" stop-color="#3b82f6" stop-opacity="0" />
-                    </linearGradient>
-                    <linearGradient
-                      id="prefix___Linear2"
-                      x1="0"
-                      y1="0"
-                      x2="1"
-                      y2="0"
-                      gradientUnits="userSpaceOnUse"
-                      gradientTransform="rotate(90.218 14.934 38.787) scale(23.50017)"
-                    >
-                      <stop offset="0" stop-color="#3b82f6" />
-                      <stop offset="1" stop-color="#3b82f6" stop-opacity="0" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-
-              <div
-                class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-primary-500"
-                title="Vue.js"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="24"
-                  height="24"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M24,1.61H14.06L12,5.16,9.94,1.61H0L12,22.39ZM12,14.08,5.16,2.23H9.59L12,6.41l2.41-4.18h4.43Z"
-                  ></path>
-                </svg>
-              </div>
-              <div
-                class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-blue-500"
-                title="TypeScript"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="24"
-                  height="24"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M1.125 0C.502 0 0 .502 0 1.125v21.75C0 23.498.502 24 1.125 24h21.75c.623 0 1.125-.502 1.125-1.125V1.125C24 .502 23.498 0 22.875 0zm17.363 9.75c.612 0 1.154.037 1.627.111a6.38 6.38 0 0 1 1.306.34v2.458a3.95 3.95 0 0 0-.643-.361 5.093 5.093 0 0 0-.717-.26 5.453 5.453 0 0 0-1.426-.2c-.3 0-.573.028-.819.086a2.1 2.1 0 0 0-.623.242c-.17.104-.3.229-.393.374a.888.888 0 0 0-.14.49c0 .196.053.373.156.529.104.156.252.304.443.444s.423.276.696.41c.273.135.582.274.926.416.47.197.892.407 1.266.628.374.222.695.473.963.753.268.279.472.598.614.957.142.359.214.776.214 1.253 0 .657-.125 1.21-.373 1.656a3.033 3.033 0 0 1-1.012 1.085 4.38 4.38 0 0 1-1.487.596c-.566.12-1.163.18-1.79.18a9.916 9.916 0 0 1-1.84-.164 5.544 5.544 0 0 1-1.512-.493v-2.63a5.033 5.033 0 0 0 3.237 1.2c.333 0 .624-.03.872-.09.249-.06.456-.144.623-.25.166-.108.29-.234.373-.38a1.023 1.023 0 0 0-.074-1.089 2.12 2.12 0 0 0-.537-.5 5.597 5.597 0 0 0-.807-.444 27.72 27.72 0 0 0-1.007-.436c-.918-.383-1.602-.852-2.053-1.405-.45-.553-.676-1.222-.676-2.005 0-.614.123-1.141.369-1.582.246-.441.58-.804 1.004-1.089a4.494 4.494 0 0 1 1.47-.629 7.536 7.536 0 0 1 1.77-.201zm-15.113.188h9.563v2.166H9.506v9.646H6.789v-9.646H3.375z"
-                  ></path>
-                </svg>
-              </div>
-              <div
-                class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-cyan-500"
-                title="Tailwind CSS"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="24"
-                  height="24"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z"
-                  ></path>
-                </svg>
-              </div>
-            </div>
-          </div>
+      <div class="hero-portrait-wrap">
+        <div class="hero-portrait">
+          <img :src="portrait" alt="Portrait of Prosper Edafe" width="1100" height="1460" fetchpriority="high" />
         </div>
 
-        <div class="hero-image">
-          <img
-            src="../assets/prosper-1.jpg"
-            alt="Prosper Edafe"
-            class="w-full h-auto rounded-lg shadow-2xl"
-          />
+        <!-- Spinning badge -->
+        <div class="hero-badge" aria-hidden="true">
+          <svg class="hero-badge-ring" viewBox="0 0 120 120">
+            <defs>
+              <path id="badge-circle" d="M60,60 m-46,0 a46,46 0 1,1 92,0 a46,46 0 1,1 -92,0" />
+            </defs>
+            <text>
+              <textPath href="#badge-circle" textLength="282">WEB ✦ MOBILE ✦ DESKTOP ✦ SINCE 2021 ✦</textPath>
+            </text>
+          </svg>
+          <span class="hero-badge-core">PE</span>
         </div>
+      </div>
+    </div>
+
+    <!-- Intro + actions -->
+    <div class="hero-bottom relative z-10 mt-10 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between lg:pr-24">
+      <p class="hero-copy max-w-[30rem] text-[1.05rem] leading-relaxed text-bone/80 md:text-lg">
+        I design and build complete digital products: web platforms, mobile apps and desktop software
+        that real businesses run on every day.
+      </p>
+
+      <div class="hero-cta flex flex-wrap items-center gap-3">
+        <router-link v-magnetic="0.25" to="/projects" class="btn btn-accent">
+          View my work <ArrowIcon :size="12" />
+        </router-link>
+        <router-link v-magnetic="0.25" to="/contact" class="btn btn-ghost">
+          Get in touch
+        </router-link>
       </div>
     </div>
   </section>
 </template>
+
+<style scoped>
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(237, 232, 223, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(237, 232, 223, 0.045) 1px, transparent 1px);
+  background-size: clamp(3.5rem, 8vw, 7rem) clamp(3.5rem, 8vw, 7rem);
+  mask-image: radial-gradient(ellipse 80% 70% at 60% 35%, #000 20%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 60% 35%, #000 20%, transparent 75%);
+}
+.hero-glow {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 46vw;
+  height: 46vw;
+  min-width: 320px;
+  min-height: 320px;
+  margin: -23vw 0 0 -10vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(200, 245, 66, 0.2) 0%, rgba(200, 245, 66, 0) 62%);
+  filter: blur(30px);
+  pointer-events: none;
+}
+
+.hero-title {
+  font-size: 20vw;
+  text-transform: uppercase;
+}
+.hero-line-1,
+.hero-line-2 {
+  white-space: nowrap;
+}
+.hero-role {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: clamp(1.5rem, 6.4vw, 2.2rem);
+  line-height: 1.1;
+  text-transform: none;
+  color: var(--accent);
+}
+
+.hero-portrait-wrap {
+  position: relative;
+  margin-top: 2rem;
+  width: 100%;
+  perspective: 1200px;
+}
+.hero-portrait {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 4 / 4.6;
+  border-radius: 1.5rem;
+  transform-style: preserve-3d;
+  will-change: transform, clip-path;
+}
+.hero-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 22%;
+  filter: saturate(0.92) contrast(1.03);
+}
+
+.hero-badge {
+  position: absolute;
+  left: -0.75rem;
+  bottom: -1.75rem;
+  width: clamp(6.5rem, 11vw, 9.5rem);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink);
+}
+.hero-badge-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.hero-badge-ring text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.2px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  fill: var(--ink);
+}
+.hero-badge-core {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.3rem, 2.2vw, 1.9rem);
+  letter-spacing: -0.05em;
+}
+
+@media (min-width: 1024px) {
+  .hero-title {
+    font-size: 15.2vw;
+  }
+  .hero-line-2 {
+    display: flex;
+    align-items: flex-end;
+    gap: 2.2vw;
+  }
+  .hero-role {
+    display: inline-block;
+    margin: 0 0 0.24em;
+    font-size: 2.5vw;
+  }
+  .hero-portrait-wrap {
+    position: absolute;
+    right: 0;
+    top: 0;
+    margin-top: 0;
+    width: clamp(15rem, 25vw, 26rem);
+  }
+  .hero-portrait {
+    aspect-ratio: 3 / 3.9;
+  }
+  .hero-badge {
+    left: -3.2rem;
+    bottom: 2rem;
+  }
+}
+
+/* Short desktop screens: keep the name and portrait inside the first view. */
+@media (min-width: 1024px) and (max-height: 760px) {
+  .hero-title {
+    font-size: 13vw;
+  }
+  .hero-portrait-wrap {
+    width: clamp(13rem, 21vw, 20rem);
+  }
+}
+</style>

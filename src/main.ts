@@ -1,35 +1,49 @@
-import { createApp } from "vue";
-import { createRouter, createWebHistory } from "vue-router";
-import { MotionPlugin } from "@vueuse/motion";
-import "./style.css";
-import App from "./App.vue";
+import { createApp } from 'vue'
+import { createRouter, createWebHistory } from 'vue-router'
+import './style.css'
+import './lib/gsap'
+import App from './App.vue'
+import { registerDirectives } from './directives'
+import Home from './views/Home.vue'
 
-// Import routes
-import Home from "./views/Home.vue";
-import About from "./views/About.vue";
-import Projects from "./views/Projects.vue";
-import Contact from "./views/Contact.vue";
-
-// Create router
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: "/", name: "Home", component: Home },
-    { path: "/about", name: "About", component: About },
-    { path: "/projects", name: "Projects", component: Projects },
-    { path: "/contact", name: "Contact", component: Contact },
+    { path: '/', name: 'home', component: Home, meta: { title: 'Home' } },
+    {
+      path: '/projects',
+      name: 'projects',
+      component: () => import('./views/Projects.vue'),
+      meta: { title: 'Work' },
+    },
+    {
+      path: '/projects/:slug',
+      name: 'project',
+      component: () => import('./views/ProjectDetail.vue'),
+      meta: { title: 'Case study' },
+    },
+    {
+      path: '/about',
+      name: 'about',
+      component: () => import('./views/About.vue'),
+      meta: { title: 'About' },
+    },
+    {
+      path: '/contact',
+      name: 'contact',
+      component: () => import('./views/Contact.vue'),
+      meta: { title: 'Contact' },
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('./views/NotFound.vue'),
+      meta: { title: 'Lost' },
+    },
   ],
-  scrollBehavior(_to, _from, savedPosition) {
-    if (savedPosition) {
-      return savedPosition;
-    } else {
-      return { top: 0 };
-    }
-  },
-});
+})
 
-// Create and mount app
-const app = createApp(App);
-app.use(router);
-app.use(MotionPlugin);
-app.mount("#app");
+const app = createApp(App)
+app.use(router)
+registerDirectives(app)
+app.mount('#app')

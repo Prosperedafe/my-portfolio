@@ -1,203 +1,340 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
-import hblImg from "../assets/hbl.png";
-import playSafari from "../assets/play-safari.png";
-import dilusso from "../assets/dilusso.png";
-import quilox from "../assets/quilox.webp";
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { gsap, Flip, ScrollTrigger, isTouch, reduced, whenReady } from '../lib/gsap'
+import { projects } from '../data/projects'
+import type { Platform } from '../types'
+import ArrowIcon from '../components/ArrowIcon.vue'
 
-interface Project {
-  id: number;
-  title: string;
-  description: string;
-  image: string;
-  technologies: string[];
-  category: string;
-  link: string;
+type Filter = 'All' | Platform
+const filters: Filter[] = ['All', 'Web', 'Mobile', 'Desktop']
+const active = ref<Filter>('All')
+
+const root = ref<HTMLElement | null>(null)
+const preview = ref<HTMLElement | null>(null)
+const hovered = ref(-1)
+let ctx: gsap.Context | null = null
+
+const pad = (n: number) => String(n).padStart(2, '0')
+const matches = (platforms: Platform[]) => active.value === 'All' || platforms.includes(active.value as Platform)
+const count = computed(() => projects.filter((p) => matches(p.platforms)).length)
+const countFor = (f: Filter) => (f === 'All' ? projects.length : projects.filter((p) => p.platforms.includes(f)).length)
+
+// Filtering: record where every row is, change the filter, then animate the difference.
+async function setFilter(f: Filter) {
+  if (f === active.value || !root.value) return
+  const rows = root.value.querySelectorAll('.project-row')
+  if (reduced) {
+    active.value = f
+    return
+  }
+  const state = Flip.getState(rows)
+  active.value = f
+  await nextTick()
+  Flip.from(state, {
+    duration: 0.8,
+    ease: 'silk',
+    absolute: true,
+    onEnter: (els) => gsap.fromTo(els, { autoAlpha: 0, y: 40 }, { autoAlpha: 1, y: 0, duration: 0.7, stagger: 0.05 }),
+    onLeave: (els) => gsap.to(els, { autoAlpha: 0, duration: 0.3 }),
+    onComplete: () => ScrollTrigger.refresh(),
+  })
 }
 
-const projects = ref<Project[]>([
-  {
-    id: 2,
-    title: "DiLusso Store",
-    description:
-      "A modern e-commerce platform featuring responsive design, user authentication, and payment integration.",
-    image: dilusso,
-    technologies: ["React", "Typescript"],
-    category: "Web Application",
-    link: "https://dilussostore.shop",
-  },
-  {
-    id: 3,
-    title: "PlaySafari",
-    description:
-      "An event booking platform designed for children's parties and educational activities. Parents can book events, receive follow-up for arrangements, and manage bookings in a user-friendly environment.",
-    image: playSafari,
-    technologies: ["React", "Typescript", "SCSS"],
-    category: "Web Application",
-    link: "https://playsafari.ca",
-  },
-  {
-    id: 4,
-    title: "Quilox Mobile App",
-    description:
-      "A mobile application for Quilox nightclub, enabling customers to manage wallet-based payments, view event details, and make purchases with real-time updates and wallet synchronization.",
-    image: quilox,
-    technologies: [
-      "React Native",
-      "TypeScript",
-      "RTK Query",
-      "Reduxjs Toolkit",
-    ],
-    category: "Mobile Application",
-    link: "https://play.google.com/store/apps/details?id=com.quilox.mobile",
-  },
-  {
-    id: 5,
-    title: "OyaSync HBL",
-    description:
-      "A desktop application for managing business sales, like restaurants, bars, gas stations and retail outlets.",
-    image: hblImg,
-    technologies: [
-      "Electron",
-      "React",
-      "RTK Query",
-      "TypeScript",
-      "Reduxjs Toolkit",
-      "MUI",
-    ],
-    category: "Desktop Application",
-    link: "https://apps.microsoft.com/detail/9N9TRMZDRQ2L?hl=en-us&gl=GB&ocid=pdpshare",
-  },
-]);
+onMounted(() => {
+  if (reduced || !root.value) return
+  ctx = gsap.context((self) => {
+    const q = self.selector!
 
-const categories = computed(() => {
-  const allCategories = projects.value.map((project) => project.category);
-  return ["All", ...new Set(allCategories)];
-});
+    // Rows build in one after another once the page is uncovered.
+    gsap.set(q('.project-row'), { autoAlpha: 0, y: 60 })
+    whenReady(() => {
+      ScrollTrigger.batch(q('.project-row'), {
+        start: 'top bottom',
+        once: true,
+        onEnter: (els) => gsap.to(els, { autoAlpha: 1, y: 0, duration: 1.1, stagger: 0.09, delay: 0.25 }),
+      })
+    })
 
-const selectedCategory = ref("All");
+    // Floating preview that trails the pointer over the list (desktop only).
+    if (!isTouch && preview.value) {
+      const p = preview.value
+      gsap.set(p, { xPercent: -50, yPercent: -50, scale: 0.6, autoAlpha: 0 })
+      const xTo = gsap.quickTo(p, 'x', { duration: 0.7, ease: 'power3.out' })
+      const yTo = gsap.quickTo(p, 'y', { duration: 0.7, ease: 'power3.out' })
+      const rTo = gsap.quickTo(p, 'rotation', { duration: 0.9, ease: 'power3.out' })
+      let lastX = 0
 
-const filteredProjects = computed(() => {
-  if (selectedCategory.value === "All") {
-    return projects.value;
-  }
-  return projects.value.filter(
-    (project) => project.category === selectedCategory.value
-  );
-});
+      const move = (e: MouseEvent) => {
+        xTo(e.clientX + 170)
+        yTo(e.clientY)
+        rTo(gsap.utils.clamp(-9, 9, (e.clientX - lastX) * 0.6))
+        lastX = e.clientX
+      }
+      const list = q('.project-list')[0] as HTMLElement
+      const enter = () => gsap.to(p, { scale: 1, autoAlpha: 1, duration: 0.5 })
+      const leave = () => {
+        hovered.value = -1
+        gsap.to(p, { scale: 0.6, autoAlpha: 0, duration: 0.35, ease: 'power2.in' })
+      }
+      list.addEventListener('mousemove', move)
+      list.addEventListener('mouseenter', enter)
+      list.addEventListener('mouseleave', leave)
+      self.add(() => () => {
+        list.removeEventListener('mousemove', move)
+        list.removeEventListener('mouseenter', enter)
+        list.removeEventListener('mouseleave', leave)
+      })
+    }
+  }, root.value)
+})
 
-const setCategory = (category: string) => {
-  selectedCategory.value = category;
-};
+onUnmounted(() => ctx?.revert())
 </script>
 
 <template>
-  <div class="pt-16">
-    <section class="section">
-      <div class="container">
-        <div class="section-heading">
-          <h2 class="text-primary-600 dark:text-primary-400">Projects</h2>
-          <p class="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Explore my latest projects that showcase my skills and expertise in
-            web development.
-          </p>
-        </div>
+  <div ref="root">
+    <section class="px-gutter pb-10 pt-36 md:pt-44">
+      <p v-reveal class="label mb-6">(Work) — {{ pad(projects.length) }} projects</p>
+      <h1 class="display text-[clamp(3.6rem,15vw,15rem)] uppercase">
+        <span v-chars="{ start: 'top 100%' }" class="block">Selected</span>
+        <span v-chars="{ start: 'top 100%', delay: 0.12 }" class="serif-i block normal-case text-accent">projects</span>
+      </h1>
 
-        <!-- Category Filter -->
-        <div
-          class="flex flex-wrap justify-center gap-3 mb-12"
-          v-motion
-          :initial="{ opacity: 0, y: 20 }"
-          :enter="{ opacity: 1, y: 0 }"
-        >
+      <div class="mt-12 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+        <p v-lines class="max-w-[30rem] text-lg text-bone/75">
+          Platforms, apps and tools I've built for founders, operators and brands. Pick one to read how it
+          came together.
+        </p>
+
+        <div v-reveal class="flex flex-wrap gap-2" role="tablist" aria-label="Filter projects by platform">
           <button
-            v-for="category in categories"
-            :key="category"
-            @click="setCategory(category)"
-            :class="[
-              'px-4 py-2 rounded-full transition-all duration-300',
-              selectedCategory === category
-                ? 'bg-primary-500 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-primary-100 dark:hover:bg-primary-900',
-            ]"
+            v-for="f in filters"
+            :key="f"
+            role="tab"
+            :aria-selected="active === f"
+            class="filter"
+            :class="{ 'is-active': active === f }"
+            @click="setFilter(f)"
           >
-            {{ category }}
+            {{ f }} <sup>{{ countFor(f) }}</sup>
           </button>
-        </div>
-
-        <!-- Projects Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <div
-            v-for="(project, index) in filteredProjects"
-            :key="project.id"
-            class="card group h-full flex flex-col overflow-hidden transform hover:-translate-y-2 transition-all duration-300"
-            v-motion
-            :initial="{ opacity: 0, y: 50 }"
-            :enter="{ opacity: 1, y: 0, transition: { delay: index * 100 } }"
-          >
-            <div class="relative overflow-hidden h-48">
-              <img
-                :src="project.image"
-                :alt="project.title"
-                class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-              />
-              <div
-                class="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-              >
-                <div class="flex space-x-3">
-                  <a
-                    :href="project.link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="bg-primary-500 text-white p-2 rounded-full hover:bg-primary-600 transition-colors"
-                    :aria-label="`Visit ${project.title} website`"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      class="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                      />
-                    </svg>
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            <div class="p-6 flex-grow flex flex-col">
-              <span
-                class="text-sm text-primary-500 dark:text-primary-400 font-medium mb-2"
-                >{{ project.category }}</span
-              >
-              <h3
-                class="text-xl font-bold mb-2 text-gray-800 dark:text-gray-200"
-              >
-                {{ project.title }}
-              </h3>
-              <p class="text-gray-600 dark:text-gray-400 mb-4 flex-grow">
-                {{ project.description }}
-              </p>
-
-              <div class="flex flex-wrap gap-2 mt-auto">
-                <span
-                  v-for="tech in project.technologies"
-                  :key="tech"
-                  class="px-2 py-1 bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400 rounded-full text-xs"
-                >
-                  {{ tech }}
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </section>
+
+    <section class="px-gutter pb-section">
+      <div class="project-list">
+        <router-link
+          v-for="(p, i) in projects"
+          v-show="matches(p.platforms)"
+          :key="p.slug"
+          :to="`/projects/${p.slug}`"
+          class="project-row"
+          data-cursor="view"
+          data-cursor-text="Open"
+          @mouseenter="hovered = i"
+        >
+          <!-- Thumbnail for touch screens, where there is no hover preview -->
+          <div class="project-thumb lg:hidden" :style="{ '--tint': p.tint }">
+            <img :src="p.cover.src" :alt="p.cover.alt" loading="lazy" :class="{ 'is-portrait': p.cover.portrait }" />
+          </div>
+
+          <div class="project-row-inner">
+            <span class="project-index">{{ pad(i + 1) }}</span>
+            <h2 class="project-title">{{ p.title }}</h2>
+            <span class="project-meta">{{ p.category }}</span>
+            <span class="project-meta hidden md:block">{{ p.platforms.join(' · ') }}</span>
+            <span class="project-meta">{{ p.year }}</span>
+            <span class="project-arrow"><ArrowIcon :size="20" /></span>
+          </div>
+          <p class="project-tagline">{{ p.tagline }}</p>
+        </router-link>
+      </div>
+      <p v-if="count === 0" class="py-16 text-center text-mute">Nothing here yet.</p>
+    </section>
+
+    <!-- Hover preview. Teleported so the smooth-scroll transform does not offset it. -->
+    <Teleport to="body">
+      <div ref="preview" class="project-preview" aria-hidden="true">
+        <div class="project-preview-stack" :style="{ transform: `translateY(${-Math.max(hovered, 0) * 100}%)` }">
+          <div v-for="p in projects" :key="p.slug" class="project-preview-item" :style="{ '--tint': p.tint }">
+            <img :src="p.cover.src" alt="" :class="{ 'is-portrait': p.cover.portrait }" />
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.filter {
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  padding: 0.7rem 1.2rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(237, 232, 223, 0.75);
+  transition:
+    background-color 0.4s,
+    color 0.4s,
+    border-color 0.4s;
+}
+.filter sup {
+  margin-left: 0.2em;
+  opacity: 0.6;
+}
+.filter:hover {
+  border-color: var(--bone);
+  color: var(--bone);
+}
+.filter.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.project-list {
+  border-bottom: 1px solid var(--line);
+}
+.project-row {
+  position: relative;
+  display: block;
+  border-top: 1px solid var(--line);
+  padding: 1.75rem 0;
+}
+.project-row > * {
+  transition: opacity 0.4s;
+}
+.project-row-inner {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: baseline;
+  column-gap: 0.75rem;
+  row-gap: 0.4rem;
+}
+.project-index,
+.project-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.project-title {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 800;
+  font-size: clamp(2.3rem, 7.2vw, 7rem);
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+  transition:
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.4s;
+}
+.project-row-inner .project-meta:nth-of-type(2) {
+  grid-column: 2;
+}
+.project-arrow {
+  grid-row: 1;
+  grid-column: 3;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.project-tagline {
+  margin: 0.9rem 0 0 3.25rem;
+  max-width: 34rem;
+  color: rgba(237, 232, 223, 0.65);
+}
+.project-thumb {
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  margin-bottom: 1.25rem;
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--tint) 22%, #111113);
+}
+.project-thumb img,
+.project-preview-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: left top;
+}
+.project-thumb img.is-portrait,
+.project-preview-item img.is-portrait {
+  object-position: center 78%;
+}
+
+@media (min-width: 1024px) {
+  .project-row {
+    padding: 2.25rem 0;
+  }
+  .project-row-inner {
+    grid-template-columns: 4rem minmax(0, 1fr) 11rem 13rem 4rem 2rem;
+    column-gap: 1.5rem;
+  }
+  .project-row-inner .project-meta:nth-of-type(2),
+  .project-arrow {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .project-list .project-row .project-tagline {
+    margin: 0;
+    max-height: 0;
+    overflow: hidden;
+    padding-left: 5.5rem;
+    opacity: 0;
+    transition:
+      max-height 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 0.4s,
+      margin 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* Hovering one row dims the rest and opens its description. */
+  .project-list:hover .project-row > * {
+    opacity: 0.32;
+  }
+  .project-list .project-row:hover > * {
+    opacity: 1;
+  }
+  .project-row:hover .project-title {
+    transform: translateX(1.5rem);
+    color: var(--accent);
+  }
+  .project-row:hover .project-arrow {
+    transform: translate(6px, -6px);
+    color: var(--accent);
+  }
+  .project-list .project-row:hover .project-tagline {
+    max-height: 5rem;
+    margin-top: 0.9rem;
+    opacity: 1;
+  }
+}
+
+.project-preview {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 30;
+  width: 24rem;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  pointer-events: none;
+  visibility: hidden;
+  box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.8);
+}
+.project-preview-stack {
+  height: 100%;
+  transition: transform 0.7s cubic-bezier(0.76, 0, 0.24, 1);
+}
+.project-preview-item {
+  height: 100%;
+  background: color-mix(in srgb, var(--tint) 22%, #111113);
+}
+@media (max-width: 1023px) {
+  .project-preview {
+    display: none;
+  }
+}
+</style>

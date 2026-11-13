@@ -1,62 +1,211 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import { gsap, reduced, scrollToTop } from '../lib/gsap'
+import { nav, site, socials } from '../data/site'
+import ArrowIcon from './ArrowIcon.vue'
+import Logo from './Logo.vue'
 
-const currentYear = ref(new Date().getFullYear());
+const route = useRoute()
+const root = ref<HTMLElement | null>(null)
+const time = ref('')
+const year = new Date().getFullYear()
 
-const socialLinks = [
-  {
-    name: "GitHub",
-    url: "https://github.com/Prosperedafe",
-    icon: "M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z",
-  },
-  {
-    name: "LinkedIn",
-    url: "https://www.linkedin.com/in/edafe-prosper-b046ba239/",
-    icon: "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z",
-  },
-  {
-    name: "Email",
-    url: "mailto:mamusedafe19@gmail.com",
-    icon: "M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z",
-  },
-];
+// The contact page already is the call to action, so the big one is skipped there.
+const showCta = computed(() => route.name !== 'contact')
+
+let timer: number | undefined
+let ctx: gsap.Context | null = null
+
+function tick() {
+  time.value = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: site.timeZone,
+  }).format(new Date())
+}
+
+onMounted(() => {
+  tick()
+  timer = window.setInterval(tick, 15000)
+
+  if (reduced || !root.value) return
+  ctx = gsap.context(() => {
+    // The giant wordmark rises letter by letter each time the footer comes into view.
+    gsap.from('.footer-letter', {
+      yPercent: 110,
+      duration: 1.2,
+      stagger: 0.035,
+      scrollTrigger: {
+        trigger: '.footer-wordmark',
+        start: 'top 96%',
+        toggleActions: 'play none none reset',
+      },
+    })
+  }, root.value)
+})
+
+onUnmounted(() => {
+  window.clearInterval(timer)
+  ctx?.revert()
+})
+
+const wordmark = 'Prosper Edafe'.split('')
 </script>
 
 <template>
-  <footer class="bg-gray-100 dark:bg-gray-800 py-12">
-    <div class="container">
-      <div class="flex flex-col md:flex-row justify-between items-center">
-        <div class="mb-6 md:mb-0">
-          <img
-            src="../../logo.png"
-            class="h-[30px] mb-2"
-            alt="Prosper Edafe logo"
-          />
-          <p class="text-gray-600 dark:text-gray-400 text-sm">
-            © {{ currentYear }} Prosper Edafe. All rights reserved.
-          </p>
-        </div>
+  <footer ref="root" class="relative overflow-hidden border-t border-line bg-ink-800">
+    <!-- Call to action -->
+    <section v-if="showCta" class="px-gutter pb-16 pt-section">
+      <p class="label mb-8 flex items-center gap-3">
+        <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-accent"></span>
+        Available for new projects
+      </p>
 
-        <div class="flex space-x-4">
-          <a
-            v-for="link in socialLinks"
-            :key="link.name"
-            :href="link.url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="p-2 rounded-full text-gray-700 dark:text-gray-300 hover:text-primary-500 dark:hover:text-primary-400 transition-colors"
-            :aria-label="link.name"
-          >
-            <svg
-              class="w-5 h-5 fill-current"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path :d="link.icon" />
-            </svg>
-          </a>
-        </div>
+      <div class="flex flex-col gap-10 lg:flex-row lg:items-end lg:justify-between">
+        <h2 class="display text-[clamp(3.2rem,12vw,12rem)]">
+          <span v-chars class="block">Let's build</span>
+          <span v-chars="{ delay: 0.12 }" class="serif-i block text-accent">something good.</span>
+        </h2>
+
+        <router-link
+          v-magnetic="0.4"
+          to="/contact"
+          class="cta-circle shrink-0"
+          data-cursor="link"
+        >
+          <span>Get in touch</span>
+          <ArrowIcon :size="18" />
+        </router-link>
       </div>
+
+      <div v-reveal class="mt-14 flex flex-wrap items-center gap-x-10 gap-y-4">
+        <a :href="`mailto:${site.email}`" class="link-line font-display text-xl md:text-2xl">
+          {{ site.email }}
+        </a>
+        <a :href="site.whatsapp" target="_blank" rel="noopener noreferrer" class="link-line font-display text-xl md:text-2xl">
+          {{ site.phoneDisplay }}
+        </a>
+      </div>
+    </section>
+
+    <div class="px-gutter">
+      <div v-rule class="rule"></div>
+    </div>
+
+    <!-- Link columns -->
+    <section class="grid grid-cols-2 gap-10 px-gutter py-12 md:grid-cols-4">
+      <div class="col-span-2 md:col-span-1">
+        <Logo :size="44" />
+        <p class="mt-5 max-w-[16rem] text-sm text-mute">
+          Software engineer building for web, mobile and desktop since {{ site.startedYear }}.
+        </p>
+      </div>
+
+      <div>
+        <p class="label mb-4">Sitemap</p>
+        <ul class="space-y-2">
+          <li v-for="item in nav" :key="item.to">
+            <router-link :to="item.to" class="footer-link">
+              <span class="roll"><span>{{ item.label }}</span><span aria-hidden="true">{{ item.label }}</span></span>
+            </router-link>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="label mb-4">Connect</p>
+        <ul class="space-y-2">
+          <li v-for="s in socials" :key="s.label">
+            <a :href="s.url" target="_blank" rel="noopener noreferrer" class="footer-link">
+              <span class="roll"><span>{{ s.label }}</span><span aria-hidden="true">{{ s.label }}</span></span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <div class="col-span-2 md:col-span-1 md:text-right">
+        <p class="label mb-4">Local time</p>
+        <p class="font-display text-3xl font-bold tabular-nums tracking-tight">
+          {{ time }} <span class="text-base font-normal text-mute">WAT</span>
+        </p>
+        <p class="mt-1 text-sm text-mute">{{ site.location }}</p>
+        <button class="footer-link mt-6 inline-flex items-center gap-2" @click="scrollToTop(true)">
+          <span class="roll"><span>Back to top</span><span aria-hidden="true">Back to top</span></span>
+          <span aria-hidden="true">↑</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Giant wordmark -->
+    <div class="footer-wordmark px-gutter" aria-hidden="true">
+      <span v-for="(l, i) in wordmark" :key="i" class="footer-letter-mask">
+        <span class="footer-letter">{{ l === ' ' ? ' ' : l }}</span>
+      </span>
+    </div>
+
+    <div class="flex flex-col gap-2 px-gutter pb-9 pr-24 pt-9 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-mute sm:flex-row sm:justify-between">
+      <span>© {{ year }} Prosper Edafe</span>
+      <span>Designed & built with Vue + GSAP</span>
     </div>
   </footer>
 </template>
+
+<style scoped>
+.cta-circle {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.6rem;
+  width: clamp(9rem, 15vw, 13rem);
+  height: clamp(9rem, 15vw, 13rem);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: background-color 0.4s;
+}
+.cta-circle:hover {
+  background: var(--bone);
+}
+.cta-circle svg {
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cta-circle:hover svg {
+  transform: translate(4px, -4px) scale(1.15);
+}
+
+.footer-link {
+  font-size: 0.95rem;
+  color: rgba(237, 232, 223, 0.85);
+  transition: color 0.3s;
+}
+.footer-link:hover {
+  color: var(--accent);
+}
+
+.footer-wordmark {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 800;
+  font-size: 12.6vw;
+  line-height: 0.82;
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+  color: var(--bone);
+  user-select: none;
+}
+.footer-letter-mask {
+  display: inline-block;
+  overflow: hidden;
+  padding-top: 0.06em;
+}
+.footer-letter {
+  display: inline-block;
+  will-change: transform;
+}
+</style>
